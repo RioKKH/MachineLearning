@@ -48,15 +48,16 @@ def _(X, train_test_split, y):
 def _(mo):
     mo.md(
         """
-        ### DecisionTreeRegressorのハイパーパラメータ
-        - criterison: squared_error 分割点を計算するときの誤差を指定する。二乗誤差が基本
-        - max_depth: None 決定木の深さの最大値
-          - 深さ4を指定している
-        - min_samples_leaf: 1 葉の作成に必要な最小レコード数
-          - 過学習を防ぐために10を指定して葉のレコード数を10個以上とする。
-        - ccp_alpha: 0 端数に対する正則化の強さ
-          - 正則化の強さに5を指定して葉が増えないよう制約を課す。
-        """)
+    ### DecisionTreeRegressorのハイパーパラメータ
+    - criterison: squared_error 分割点を計算するときの誤差を指定する。二乗誤差が基本
+    - max_depth: None 決定木の深さの最大値
+      - 深さ4を指定している
+    - min_samples_leaf: 1 葉の作成に必要な最小レコード数
+      - 過学習を防ぐために10を指定して葉のレコード数を10個以上とする。
+    - ccp_alpha: 0 端数に対する正則化の強さ
+      - 正則化の強さに5を指定して葉が増えないよう制約を課す。
+    """
+    )
     return
 
 
