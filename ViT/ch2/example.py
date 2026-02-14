@@ -36,7 +36,7 @@ class SimpleMlp(nn.Module):
                 D_out: ベクトルの長さ
         """
         # 1つ目の線形層
-        out = self.layer1(x)
+        out = self.layser1(x)
         # ReLU
         out = self.relu(out)
         # 2つ目の線形層
