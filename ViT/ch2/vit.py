@@ -71,7 +71,7 @@ class VitInputLayer(nn.Module):
         z_0 = self.patch_emb_layer(x)
 
         ## パッチのflatten (B, D, H/P, W/P) -> (B, D, Np)
-        ## ここでNpはパッチの数 (=H x W / P^2)
+        ## ここでNpパッチの数 (=H x W / P^2)
         z_0 = z_0.flatten(2)
 
         # 軸の入れ替え (B, D, Np) -> (B, Np, D)
