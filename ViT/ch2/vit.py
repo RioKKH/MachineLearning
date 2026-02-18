@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+# -*- coding:utf-8 -*-
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class VitInputLayer(nn.Module):
@@ -89,6 +91,30 @@ class VitInputLayer(nn.Module):
         z_0 = z_0 + self.pos_emb
 
         return z_0
+
+
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, emb_dim: int = 384, head: int = 3, dropout: float = 0.0):
+        """
+        引数:
+            emb_dim: 埋め込み後のベクトルの長さ
+            head: ヘッドの数
+            dropout: ドロップアウト率
+        """
+        self.head = head
+        self.emb_dim = emb_dim
+        self.head_dim = emb_dim // head
+        self.sqrt_dh = self.head_dim**0.5  # D_hの二乗根。qk^Tを割るための係数
+
+        # 入力をq, k, vに埋め込むための線形層 (式6)
+        self.w_q = nn.Linear(emb_dim, emb_dim, bias=False)
+        self.w_k = nn.Linear(emb_dim, emb_dim, bias=False)
+        self.w_v = nn.Linear(emb_dim, emb_dim, bias=False)
+
+        # 式(7) にはないが、実装ではドロップアウト層も用いる
+        self.attn_drop = nn.Dropout(dropout)
+
+        # MHSAの結果を出力ｎ埋め込むための線形層 (式10)
 
 
 if __name__ == "__main__":
