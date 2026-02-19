@@ -101,6 +101,7 @@ class MultiHeadSelfAttention(nn.Module):
             head: ヘッドの数
             dropout: ドロップアウト率
         """
+        super(MultiHeadSelfAttention, self).__init__()
         self.head = head
         self.emb_dim = emb_dim
         self.head_dim = emb_dim // head
@@ -115,6 +116,67 @@ class MultiHeadSelfAttention(nn.Module):
         self.attn_drop = nn.Dropout(dropout)
 
         # MHSAの結果を出力ｎ埋め込むための線形層 (式10)
+        ## 式10にはないが、実装ではドロップアウト層も用いる
+        self.w_o = nn.Sequential(nn.Linear(emb_dim, emb_dim), nn.Dropout(dropout))
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        """
+        引数:
+            z: MHSAへの入力。形状は (B, N, D)。
+                B: バッチサイズ
+                N: トークンの数
+                D: ベクトルの長さ
+
+        返り値:
+            out: MHSAの出力。形状は (B, N, D)。[式10]
+                B: バッチサイズ
+                N: トークンの数
+                D: 埋め込みベクトルの長さ
+        """
+
+        batch_size, num_patch, _ = z.size()
+
+        # 埋め込み 式6
+        ## (B, N, D) -> (B, N, D)
+        q = self.w_q(z)
+        k = self.w_k(z)
+        v = self.w_v(z)
+
+        # q, k, vをヘッドに分ける 式10
+        ## 先ずベクトルをヘッドの個数(h)に分ける
+        ## (B, N, D) -> (B, N, h, D//h)
+        q = q.view(batch_size, num_patch, self.head, self.head_dim)
+        k = k.view(batch_size, num_patch, self.head, self.head_dim)
+        v = v.view(batch_size, num_patch, self.head, self.head_dim)
+
+        ## Self-Attentionが出来るように
+        ## (バッチサイズ、ヘッド、トークン数、パッチのベクトル) の形に変更する
+        ## (B, N, h, D//h) -> (B, h, N, D//h)
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+
+        # 内積 式7
+        ## (B, h, N, D//h) -> (B, h, D//h, N)
+        k_T = k.transpose(2, 3)
+        ## (B, h, n, D//h) x (B, h, D//h, N) -> (B, h, N, N)
+        dots = (q @ k_T) / self.sqrt_dh
+        ## 列方向にソフトマックス関数
+        attn = F.softmax(dots, dim=-1)
+        ## ドロップアウト
+        attn = self.attn_drop(attn)
+        # 加重和 式8
+        ## (B, h, N, N) x (B, h, N, D//h) -> (B, h, N, D//h)
+        out = attn @ v
+        ## (B, h, N, D//h) -> (B, N, h, D//h)
+        out = out.transpose(1, 2)
+        ## (B, N, h, D//h) -> (B, N, D)
+        out = out.reshape(batch_size, num_patch, self.emb_dim)
+
+        # 出力層 式10
+        ## (B, N, D) -> (B, N, D)
+        out = self.w_o(out)
+        return out
 
 
 if __name__ == "__main__":
@@ -127,3 +189,9 @@ if __name__ == "__main__":
 
     # (2, 5, 384) (=(B, N, D)) になっていることを確認
     print(z_0.shape)
+
+    mhsa = MultiHeadSelfAttention()
+    out = mhsa(z_0)
+
+    # (2, 5, 384) = (B, N, D) になっている事を確認
+    print(out.shape)
