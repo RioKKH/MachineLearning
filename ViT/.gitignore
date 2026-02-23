@@ -1,4 +1,7 @@
 .venv
 __marimo__
+__pycache__
 layouts
 *.org
+data
+CLAUDE.md

@@ -3,4 +3,7 @@ name = "vit"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "marimo>=0.20.1",
+    "matplotlib>=3.10.8",
+]

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
+from sympy import Mul
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -179,11 +180,152 @@ class MultiHeadSelfAttention(nn.Module):
         return out
 
 
+class VitEncoderBlock(nn.Module):
+    def __init__(
+        self,
+        emb_dim: int = 384,
+        head: int = 8,
+        hidden_dim: int = 384 * 4,
+        dropout: float = 0.0,
+    ):
+        """
+        引数:
+            emb_dim: 埋め込み後のベクトルの長さ
+            head: ヘッドの数
+            hidden_dim: Encoder BlockのMLPにおける中間層のベクトルの長さ
+                        原論文に従ってemb_dimの4倍をデフォルト値としている
+            dropout: ドロップアウト率
+        """
+        super(VitEncoderBlock, self).__init__()
+        # 1つ目のLayer Normalization [2-5-2項]
+        self.ln1 = nn.LayerNorm(emb_dim)
+        # MHSA [2-4-7項]
+        self.mhsa = MultiHeadSelfAttention(
+            emb_dim=emb_dim,
+            head=head,
+            dropout=dropout,
+        )
+        # 2つ目のLayer Normalization [2-5-2項]
+        self.ln2 = nn.LayerNorm(emb_dim)
+        # MLP [2-5-3]
+        self.mlp = nn.Sequential(
+            nn.Linear(emb_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, emb_dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        """
+        引数:
+            z: Encoder Blockへの入力。形状は(B, N, D
+                B: バッチサイズ
+                N: トークン数
+                D: ベクトルの長さ
+        返り値:
+            out: Encoder Blockへの出力。形状は (B, N, D) 式10
+                B: バッチサイズ
+                N: トークンの数
+                D: 埋め込みのベクトルの長さ
+        """
+        # Encoder Blockの前半部分 式12
+        out = self.mhsa(self.ln1(z)) + z
+        # Encoder Blockの後半部分 式13
+        out = self.mlp(self.ln2(out)) + out
+        return out
+
+
+class Vit(nn.Module):
+    def __init__(
+        self,
+        in_channels: int = 3,
+        num_classes: int = 10,
+        emb_dim: int = 384,
+        num_patch_row: int = 2,
+        image_size: int = 32,
+        num_blocks: int = 7,
+        head: int = 8,
+        hidden_dim: int = 384 * 4,
+        dropout: float = 0.0,
+    ):
+        """
+        引数:
+            in_channels: 入力画像のチャンネル数
+            num_classes: 画像分類のクラス数
+            emb_dim: 埋め込み後のベクトルの長さ
+            num_patch_row: 1辺のパッチの数
+            image_size: 入力画像の1辺の大きさ。入力画像の高さと幅は同じであると仮定
+            num_blocks: Encoder Blockの数
+            head: ヘッドの数
+            hidden_dim: Encoder BlockのMLPにおける中間層のベクトルの長さ
+            dropout: ドロップアウト率
+        """
+        super(Vit, self).__init__()
+        # Input Layer [2-3]
+        self.input_layer = VitInputLayer(
+            in_channels, emb_dim, num_patch_row, image_size
+        )
+
+        # Encoder。Encoder Blockの多段 [2-5]
+        self.encoder = nn.Sequential(
+            *[
+                VitEncoderBlock(
+                    emb_dim=emb_dim, head=head, hidden_dim=hidden_dim, dropout=dropout
+                )
+                for _ in range(num_blocks)
+            ]
+        )
+
+        # MLP Head [2-6-1]
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(emb_dim), nn.Linear(emb_dim, num_classes)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        引数:
+            x: ViTへの入力画像。形状は (B, C, H, W)
+                B: バッチサイズ
+                C: チャンネル数
+                H: 高さ
+                W: 幅
+        返り値:
+            out: ViTの出力。形状は (B, M)。式10
+                B: バッチサイズ
+                M: クラス数
+        """
+        # Input Layer 式14
+        ## (B, C, H, W) -> (B, N, D)
+        ## N: トークン数 (=パッチの数+1), D: ベクトルの長さ
+        out = self.input_layer(x)
+
+        # Encoder 式15, 16
+        ## (B, N, D) -> (B, N, D)
+        out = self.encoder(out)
+
+        # クラストークンのみ抜き出す
+        ## (B, N, D) -> (B, D)
+        cls_token = out[:, 0]
+
+        # MLP Head 式17
+        ## (B, D) -> (B, M)
+        pred = self.mlp_head(cls_token)
+        return pred
+
+
 if __name__ == "__main__":
     import torch
 
+    num_classes = 10
     batch_size, channel, height, width = 2, 3, 32, 32
     x = torch.randn(batch_size, channel, height, width)
+    vit = Vit(in_channels=channel, num_classes=num_classes)
+    pred = vit(x)
+
+    # (2, 10) = (B, M) になっている事を確認
+    print(pred.shape)
+
     input_layer = VitInputLayer(num_patch_row=2)
     z_0 = input_layer(x)
 
@@ -195,3 +337,8 @@ if __name__ == "__main__":
 
     # (2, 5, 384) = (B, N, D) になっている事を確認
     print(out.shape)
+
+    vit_enc = VitEncoderBlock()
+    z_1 = vit_enc(z_0)
+    # (2, 5, 384) = (B, N, D) になっている事を確認
+    print(z_1.shape)
