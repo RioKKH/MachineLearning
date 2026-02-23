@@ -228,16 +228,47 @@ def _(mo):
 
     ### `nn.CrossEntropyLoss()`
 
-    多クラス分類の標準的な損失関数。内部で **Softmax** と **NLLLoss（負の対数尤度損失）** を組み合わせており、モデルのlogits（生の出力値）をそのまま受け取れます。
+    多クラス分類の標準的な損失関数。内部で **Softmax** と **NLLLoss（負の対数尤度損失）** の2ステップを組み合わせており、モデルのlogits（生の出力値）をそのまま受け取れます。
+
+    #### ステップ1: Softmax — logitsを確率に変換
+
+    クラス数を $C$、モデルの出力（logits）を $\boldsymbol{z} = (z_1, z_2, \ldots, z_C)$ とすると、各クラスの予測確率は：
+
+    $$p_k = \text{Softmax}(z_k) = \frac{e^{z_k}}{\displaystyle\sum_{j=1}^{C} e^{z_j}}$$
+
+    全クラスの確率の和は1になります（$\sum_{k=1}^{C} p_k = 1$）。
+
+    #### ステップ2: Negative Log-Likelihood — 正解クラスの確率から損失を計算
+
+    正解クラスのラベルを $y$ とすると、1サンプルの損失は：
+
+    $$\ell = -\log p_y$$
+
+    $p_y$ が1（完全に正解）に近いほど損失は0に近づき、$p_y$ が0（完全に不正解）に近いほど損失は大きくなります。
+
+    #### 合わせるとCross-Entropy Loss
+
+    バッチサイズ $N$ のミニバッチ全体の平均損失：
+
+    $$\mathcal{L} = -\frac{1}{N} \sum_{i=1}^{N} \log \frac{e^{z_{i,y_i}}}{\displaystyle\sum_{j=1}^{C} e^{z_{i,j}}}$$
+
+    | 記号 | 意味 |
+    |------|------|
+    | $N$ | バッチサイズ（ここでは64） |
+    | $C$ | クラス数（FashionMNISTでは10） |
+    | $z_{i,j}$ | $i$番目のサンプルの$j$番目クラスに対するlogits |
+    | $y_i$ | $i$番目のサンプルの正解クラスラベル |
+
+    > **Note**: PyTorchの `nn.CrossEntropyLoss` はSoftmaxを内部で処理するため、モデルの出力にSoftmaxを適用する必要はありません。また、Softmaxを分離せず一体で計算する方が数値的に安定します（[log-sum-exp trick](https://gregorygundersen.com/blog/2020/02/09/log-sum-exp/)）。
 
     ### `torch.optim.Adam`
 
-    適応的な学習率を持つ最適化アルゴリズム。SGDより学習が安定しやすく、Transformerとの相性が良いため、チュートリアルのSGDの代わりに採用します。
+    適応的な学習率を持つ最適化アルゴリズム。パラメータごとに学習率を自動調整するため、SGDより学習が安定しやすく、Transformerとの相性が良いため、チュートリアルのSGDの代わりに採用します。
 
     | 引数 | 説明 |
     |------|------|
     | `model.parameters()` | 学習対象のパラメータ（重み・バイアス）をすべて渡す |
-    | `lr=1e-3` | 学習率（0.001） |
+    | `lr=1e-3` | 初期学習率（0.001） |
     """)
     return
 

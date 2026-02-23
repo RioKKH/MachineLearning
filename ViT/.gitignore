@@ -5,3 +5,5 @@ layouts
 *.org
 data
 CLAUDE.md
+*.pdf
+*.png
